@@ -1,0 +1,68 @@
+module datapath (
+    input clk,  // clock
+    input rst,  // reset_conditioner
+    input random_value[16],
+    input ra_address[3],
+    input rb_address[3],
+    input write_address[3],
+    input we,
+    input asel[2],
+    input bsel[2],
+    input alufn[6],
+    input wdsel[2],
+    input current_button_press[16],
+    output rb_data[16],
+    output p1_score[16],
+    output p2_score[16],
+    output led_state[16]
+  ) {
+  
+  alu alu;
+  regfile regfile(.clk(clk), .rst(rst));
+  
+  
+  sig a[16];
+  sig b[16];
+  sig wdsel_out[16];
+
+  always {
+    regfile.ra_address = ra_address;
+    regfile.rb_address = rb_address;
+    regfile.write_address = write_address;
+    regfile.we = we;
+    rb_data = regfile.rb_data;
+    p1_score = regfile.p1_score;
+    p2_score = regfile.p2_score;
+    led_state = regfile.led_state;
+    a = 0;
+    b = 0;
+    wdsel_out = 0;
+    
+    case (bsel){
+        b00: b = regfile.rb_data;
+        b01: b = b1;
+        b10: b = d7;
+        b11: b = d32; // max score, change to 99 later on if desired
+    }
+    
+    case (asel){
+        b00: a = regfile.ra_data;
+        b01: a = b0;
+        b10: a = b1;
+        b11: a = random_value;
+    }
+    
+    alu.a = a;
+    alu.b = b;
+    alu.alufn_signal = alufn;
+    
+    case (wdsel){
+      b00: wdsel_out = alu.out;
+        b01: wdsel_out = 16hFFFF;
+        b10: wdsel_out = current_button_press;
+        b11: wdsel_out = 0;
+    }
+    
+    regfile.write_data = wdsel_out;
+  }
+}

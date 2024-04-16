@@ -1,0 +1,33 @@
+module adder (
+    input a[16],
+    input b[16],
+    input alufn_signal[6],
+    output out[16],
+    output z,
+    output v,
+    output n
+  ) {
+  rca rca;
+  nor16 nor16;
+  findV findV;
+  sig i[16];
+  
+ 
+  always {
+    rca.a = a;
+    i[15:0] = b[15:0] ^ 16x{alufn_signal[0]};
+ 
+    rca.b = i;
+  
+    rca.ci = alufn_signal[0];
+    out = rca.s;
+    nor16.a = rca.s;
+    z = nor16.out;
+    
+    findV.a15 = a[15];
+    findV.xb15 = b[15] ^ alufn_signal[0];
+    findV.s15 =rca.s[15];
+    v = findV.v;
+    n = rca.s[15];
+    
+    

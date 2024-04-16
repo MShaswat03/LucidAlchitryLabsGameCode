@@ -1,0 +1,78 @@
+module au_top (
+    input clk,              // 100MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input usb_rx,           // USB->Serial input
+    output usb_tx,          // USB->Serial output
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield (ANODE)
+    output io_sel [4],      // Digit select on IO Shield
+    //output sev_seg[7],
+    //output sev_seg_digit[4],
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8]     // DIP switches on IO Shield
+  ) {
+  
+  sig rst;
+  control control_unit(.clk(clk), .rst(rst));
+  datapath datapath_unit(.clk(clk), .rst(rst));
+  multi_seven_seg seg(.clk(clk), .rst(rst));
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    button_conditioner button_conditioner[7];
+    edge_detector edge_detector[7](#RISE(1), #FALL(0));
+  }
+  
+  always {
+  
+    reset_cond.in = ~rst_n;   // input raw inverted reset signal
+    rst = reset_cond.out;     // conditioned reset
+    button_conditioner.in = c{io_dip[2][7], io_dip[0][0], io_button};
+    edge_detector.in = button_conditioner.out;
+    
+    led = 8b0; 
+    usb_tx = usb_rx;
+    io_sel = 4h0;
+    io_seg = 8hF;
+    
+    
+    datapath_unit.alufn = control_unit.alufn;
+    datapath_unit.we = control_unit.we;
+    datapath_unit.asel = control_unit.asel;
+    datapath_unit.bsel = control_unit.bsel;
+    datapath_unit.wdsel = control_unit.wdsel;
+    datapath_unit.ra_address = control_unit.ra_address;
+    datapath_unit.rb_address = control_unit.rb_address;
+    datapath_unit.write_address = control_unit.write_address;
+    datapath_unit.random_value = control_unit.random_value;
+    datapath_unit.current_button_press = control_unit.current_button_press;
+    control_unit.rb_data = datapath_unit.rb_data;
+
+    control_unit.start_button_press = edge_detector.out[6]; // io_dip[2][7] flick up to START
+    control_unit.p1_buttons_press = c{edge_detector.out[2], edge_detector.out[1], edge_detector.out[0]}; // io_button[0], [1], [2] for p1
+    control_unit.p1_buttons_press_only_one_button = (edge_detector.out[0] ^ ~edge_detector.out[1] ^ ~edge_detector.out[2]) | (~edge_detector.out[0] ^ edge_detector.out[1] ^ ~edge_detector.out[2])  | (~edge_detector.out[0] ^ ~edge_detector.out[1] ^ edge_detector.out[2]) ;
+    control_unit.p2_buttons_press = c{edge_detector.out[5], edge_detector.out[4], edge_detector.out[3]};
+    control_unit.p2_buttons_press_only_one_button = (edge_detector.out[4] ^ ~edge_detector.out[3] ^ ~edge_detector.out[5]) | (~edge_detector.out[4] ^ edge_detector.out[3] ^ ~edge_detector.out[5]) | (~edge_detector.out[4] ^ ~edge_detector.out[3] ^ edge_detector.out[5]);
+    
+    // use io_led[2] for LED 
+    io_led[2] = datapath_unit.led_state;
+    
+    // use io_led[0] for p1 score 
+    io_led[0] = datapath_unit.p1_score;
+    seg.values = {4b0, datapath_unit.p1_score[3:0], 4b0, datapath_unit.p2_score[3:0]};
+    //seg.values = {8, 8, 8, 8};
+    // use io_led[1] for p2 score 
+    io_led[1] = datapath_unit.p2_score;
+    
+    io_seg = ~seg.seg;
+    io_sel = ~seg.sel;
+    
+    //player 1 
+    
+
+   
+  }
+}

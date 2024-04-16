@@ -1,0 +1,39 @@
+module right_shift (
+    input a[16],
+    input b[5],
+    output shift[16]
+  ) {
+  sig i[16];
+  sig j[16];
+  sig k[16];
+  sig l[16];
+  mux_2 mux_2_5[5];
+  always {
+    mux_2_5.s0[0] = b[4];
+    mux_2_5.in1[0] = a;
+    mux_2_5.in2[0] = c{16b0, a[15:0]};
+    i = mux_2_5.out[0];
+    
+    mux_2_5.s0[1] = b[3];
+    mux_2_5.in1[1] = i;
+    mux_2_5.in2[1] = c{8b0, i[15:8]};
+    j = mux_2_5.out[1];
+    
+    mux_2_5.s0[2] = b[2];
+    mux_2_5.in1[2] = j;
+    mux_2_5.in2[2] = c{4b0, j[15:4]};
+    k = mux_2_5.out[2];
+    
+    mux_2_5.s0[3] = b[1];
+    mux_2_5.in1[3] = k;
+    mux_2_5.in2[3] = c{2b0,k[15:2]};
+    l = mux_2_5.out[3];
+    
+    mux_2_5.s0[4] = b[0];
+    mux_2_5.in1[4] = l;
+    mux_2_5.in2[4] = c{b0, l[15:1]};
+    shift = mux_2_5.out[4];
+  }
+}
+
+

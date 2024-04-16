@@ -1,0 +1,32 @@
+module regfile (
+    input clk,  // clock
+    input rst,  // reset
+    output out,
+    input ra_address[3],
+    input rb_address[3],
+    input write_address[3],
+    input write_data[16],
+    input we,
+    output ra_data[16],
+    output rb_data[16],
+    output p1_score[16],
+    output p2_score[16],
+    output led_state[16]
+  ) {
+  
+  dff registers[8][16](.clk(clk), .rst(rst));
+
+  always {
+    out = 0;
+    registers.d[6] = b011;
+    registers.d[7] = b111;
+    ra_data = registers.q[ra_address];
+    rb_data = registers.q[rb_address];
+    if(we){
+      registers.d[write_address] = write_data;
+    }
+    p1_score = registers.q[0];
+    p2_score = registers.q[1];
+    led_state = registers.q[2];
+  }
+}

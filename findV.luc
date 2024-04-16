@@ -1,0 +1,11 @@
+module findV (
+    input xb15,  
+    input s15,
+    input a15,
+    output v
+  ) {
+
+  always {
+    v = a15 & xb15 & ~s15 | ~a15 & ~xb15 & s15;
+  }
+}

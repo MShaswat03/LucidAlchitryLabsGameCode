@@ -1,0 +1,51 @@
+module shifter (
+    input a[16],
+    input b[5],
+    input alufn_signal[6],
+    output shift[16]
+  ) { 
+  
+  left_shift left_shift;
+  right_shift right_shift;
+  sra_right_shift sra;
+
+  always {
+    left_shift.a = 0;
+    left_shift.b = 0;
+    shift = left_shift.shift;
+    right_shift.a = 0;
+    right_shift.b = 0;
+    sra.a = 0;
+    sra.b = 0;
+    
+    
+    case(alufn_signal[1:0]){
+      2b00: left_shift.a = a;
+          left_shift.b = b;
+          shift = left_shift.shift; 
+      2b01: right_shift.a = a;
+          right_shift.b = b;
+          shift = right_shift.shift;
+      2b11: sra.a = a;
+          sra.b = b;
+          shift = sra.shift;
+ 
+      
+    }
+        
+
+    
+        
+        
+        
+      //01: // shift right
+      //11: // shift right with sign extension
+      
+    }
+      
+    
+  }
+
+
+
+

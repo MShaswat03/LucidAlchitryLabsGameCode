@@ -1,0 +1,15 @@
+module nor16 (
+    input a[16],  // clock
+    output out
+  ) {
+  sig i[16];
+  
+  always {
+    i[0] = a[0];
+    i[15:1] = i[14:0] | a[15:1];
+    out = ~i[15];
+    
+   
+    
+  }
+}

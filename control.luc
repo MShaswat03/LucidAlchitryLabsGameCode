@@ -1,0 +1,316 @@
+
+module control (
+      input clk, // clock
+      input rst, // reset
+      output ra_address[3],
+      output rb_address[3],
+      output write_address[3],
+      output we,
+      output alufn[6],
+      output bsel[2],
+      output asel[2],
+      output wdsel[2],
+      output random_value[3], // 100: BLUE ON, 010 RED ON, 001 GREEN ON. Only one light will be ON at a time
+      output current_button_press[16], // last 3 bits signifies current player's button press, e.g: 010 (middle button RED is pressed, the other two isn't)
+      input rb_data[16],
+      input p1_buttons_press[3],
+      input p2_buttons_press[3],
+      input start_button_press,
+      input p1_buttons_press_only_one_button,
+      input p2_buttons_press_only_one_button
+) {
+      pn_gen random_generator(.clk(clk), .rst(rst));
+      dff ctr[32](.clk(clk), .rst(rst));
+  
+      .clk(clk){
+          .rst(rst){
+                fsm game_state={
+                        START,
+                        INIT_SEQ,
+                        IDLE, 
+                        CHECK_P1BUTTONINPUT_PART1,
+                        CHECK_P1BUTTONINPUT_PART2,
+                        CHECK_P2BUTTONINPUT_PART1,
+                        CHECK_P2BUTTONINPUT_PART2,
+                        INCREASE_P1SCORE, 
+                        INCREASE_P2SCORE, 
+                        RESET_P1,
+                        RESET_P2,
+                        ENDGAME_1, // p1 wins state
+                        ENDGAME_2, // p2 wins state
+                        CHECK_GAME_OVER_P1_PART1,
+                        CHECK_GAME_OVER_P1_PART2,
+                        CHECK_GAME_OVER_P2_PART1,
+                        CHECK_GAME_OVER_P2_PART2,
+                        RESET_EVERYTHING_PART1, // set 0 to R2, led reg 
+                        RESET_EVERYTHING_PART2, // set 0 to p1 score reg, R0 
+                        RESET_EVERYTHING_PART3 // set 0 to p2 score reg, R1  
+                };
+      }
+}
+      always {
+            ctr.d = ctr.q + 1;
+            random_generator.next = 1; // continuously generate random numbers
+            random_generator.seed = ctr.q; // seed is always changed based on counter clock
+            ra_address = 0;
+            rb_address = d2; // always receiving the led value
+            write_address = 0;
+            we = 0;
+            alufn = 0;
+            bsel = 0;
+            asel = 0;
+            wdsel = 0;
+            random_value = 0;
+            current_button_press = 0;
+
+            case (game_state.q){
+      
+              game_state.START:
+            
+                  if (start_button_press){
+                      game_state.d = game_state.RESET_EVERYTHING_PART1;
+                      random_generator.seed = ctr.q; // use different seed so we have different sequence each time
+                  }
+            
+              game_state.INIT_SEQ:
+                      we = 1;
+                      write_address = 3d2; // write to R2, LED REG
+                      asel = b11;
+                      if(random_generator.num[0]){
+                      random_value = b001; // GREEN
+                      }
+                      else if(random_generator.num[1]){
+                      random_value = b010; // RED
+                      }
+                      else if(random_generator.num[2]){
+                      random_value = b100; // BLUE
+                      }
+                      else{
+                      random_value = b100; // BLUE for everything else
+                      }
+                      alufn = b011010; // A
+                      wdsel = b00; // pass ALU output
+                              
+                      game_state.d = game_state.IDLE;
+                      
+              
+              
+              game_state.IDLE:
+                      // check for button presses here
+                      if(p1_buttons_press){
+                              if(p1_buttons_press_only_one_button){
+                                // store p1 press into temp reg R3
+                                  we=1;
+                                  wdsel = b10; // pass current_button_press output to write_data regfile
+                                  write_address = b011; // write to temp reg R3
+                                  current_button_press = p1_buttons_press;
+                                 game_state.d = game_state.CHECK_P1BUTTONINPUT_PART1;
+                                }
+                                else{
+                                game_state.d = game_state.RESET_P1;
+                                }
+                      }
+                        
+                      else if(p2_buttons_press){
+                              if(p2_buttons_press_only_one_button){
+                                // store p2 press into temp reg R3
+                                  we=1;
+                                  wdsel = b10; 
+                                  write_address = b011; // write to temp reg R3
+                                  current_button_press = p2_buttons_press;
+                                  game_state.d = game_state.CHECK_P2BUTTONINPUT_PART1;
+                                }
+                              else{
+                              game_state.d = game_state.RESET_P2;
+                              }
+                      }
+                    else if(start_button_press){
+                      game_state.d = game_state.RESET_EVERYTHING_PART1;
+                    }
+                    else{
+                      game_state.d = game_state.IDLE;
+                    }
+              
+               game_state.CHECK_P1BUTTONINPUT_PART1:
+                       alufn = b110011; // CMPEQ 
+                       ra_address = b10; // Check R2 led == R3 (current player input)
+                       rb_address = b11; // R3 
+                       asel = 0;
+                       bsel = 0;
+                       wdsel = 0; 
+                       write_address = b100; // store CMPEQ result to R4 
+                       we = 1;
+                       game_state.d = game_state.CHECK_P1BUTTONINPUT_PART2;
+              
+              game_state.CHECK_P1BUTTONINPUT_PART2:
+                       rb_address = b100; // check the CMPEQ result 
+                       if (rb_data[0]){
+                          game_state.d = game_state.INCREASE_P1SCORE;
+                        }
+                      else{
+                        game_state.d = game_state.RESET_P1;
+                      }
+                   
+              game_state.INCREASE_P1SCORE:
+                      alufn = b000000; //ADD 
+                      asel = b10; // constant 1 
+                      bsel = b00; 
+                      rb_address = b000; // select R0 
+                      wdsel = b00; 
+                      write_address = b000; 
+                      we = 1; 
+                      game_state.d = game_state.CHECK_GAME_OVER_P1_PART1;
+                
+              game_state.CHECK_GAME_OVER_P1_PART1:
+                      
+                      alufn = b110011;  // CMPEQ
+                      bsel = b11; // 99
+                      asel = b00;
+                      ra_address = b000; // p1 score
+                      wdsel = b00; 
+                      write_address = b101; // temp reg R5 
+                      we=1;
+                      game_state.d = game_state.CHECK_GAME_OVER_P1_PART2;
+                    
+                    
+              game_state.CHECK_GAME_OVER_P1_PART2:      
+                      rb_address = b101; // inspect R5
+                        if (rb_data[0]){
+                          // means p0 score is 99 
+                          game_state.d = game_state.ENDGAME_1; // p1 wins 
+                      }
+                      else{
+                        game_state.d = game_state.INIT_SEQ;
+                      }
+              
+              game_state.ENDGAME_1:
+                      // p1 wins 
+                      // light up 2 bulbs 
+                      current_button_press = b011; 
+                      wdsel = b10; 
+                      // pass current_button_press to wdsel
+                      write_address = b10; // write 011 to R2, the led reg, so this lights up 2 bulbs, which differentiates from game time  
+                      we = 1; 
+                      game_state.d = game_state.START;
+                       
+              game_state.RESET_P1:
+                      we=1;  
+                      wdsel=b11;
+                      write_address=b000; // write 0 to R0 
+                      game_state.d = game_state.IDLE; // go back to idle to wait for correct input 
+                
+              game_state.RESET_EVERYTHING_PART1:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b010; // write 0 to R2, the led reg 
+                      game_state.d = game_state.RESET_EVERYTHING_PART2;
+
+              game_state.RESET_EVERYTHING_PART2:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b000; // write 0 to R0, the p0 score 
+                      game_state.d = game_state.RESET_EVERYTHING_PART3;        
+
+              game_state.RESET_EVERYTHING_PART3:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b001; // write 0 to R1, the p1 score
+                      game_state.d = game_state.INIT_SEQ;     
+                      
+              //Player 2 here
+              game_state.CHECK_P2BUTTONINPUT_PART1:
+                      alufn = b110011; // CMPEQ 
+                      ra_address = b10; // Check R2 led == R3 (current player input)
+                      rb_address = b11; // R3 
+                      asel = 0;
+                      bsel = 0;
+                      wdsel = 0; 
+                      write_address = b100; // store CMPEQ result to R4 
+                      we = 1;
+                      game_state.d = game_state.CHECK_P2BUTTONINPUT_PART2;
+                      
+              game_state.CHECK_P2BUTTONINPUT_PART2:
+                      rb_address = b100; // check the CMPEQ result 
+                      if (rb_data[0]){
+                        game_state.d = game_state.INCREASE_P2SCORE;
+                      }
+                      else{
+                        game_state.d = game_state.RESET_P2;
+                      }
+                   
+              game_state.INCREASE_P2SCORE:
+                      alufn = b000000; //ADD 
+                      asel = b10; // constant 1 
+                      bsel = b00; 
+                      rb_address = b001; // select R1: P2 score
+                      wdsel = b00; 
+                      write_address = b001; 
+                      we = 1; 
+                      game_state.d = game_state.CHECK_GAME_OVER_P2_PART1;
+                      
+              game_state.CHECK_GAME_OVER_P2_PART1:
+                      alufn = b110011;  // CMPEQ
+                      bsel = b11; // 99
+                      asel = b00;
+                      ra_address = b000; // p1 score
+                      wdsel = b00; 
+                      write_address = b101; // temp reg R5 
+                      we=1;
+                      game_state.d = game_state.CHECK_GAME_OVER_P2_PART2;
+                    
+                    
+              game_state.CHECK_GAME_OVER_P2_PART2:
+                      rb_address = b101; // inspect R5 
+                      if (rb_data[0]){
+                        // means p2 score is 99 
+                        game_state.d = game_state.ENDGAME_2; // p2 wins 
+                      }
+                      else{
+                        game_state.d = game_state.INIT_SEQ;
+                      }
+                    
+              game_state.ENDGAME_2:
+                      // p1 wins 
+                      // light up 3 bulbs 
+                      current_button_press = b111; 
+                      wdsel = b10; 
+                      write_address = b10; // write 011 to R2, the led reg, so this lights up 2 bulbs, which differentiates from game time  
+                      we = 1; 
+                      game_state.d = game_state.START;
+            
+              game_state.RESET_P2:
+                      we=1;  
+                      wdsel=b11;
+                      write_address=b001; // write 0 to R1, P2's score
+                      game_state.d = game_state.IDLE; // go back to idle to wait for correct input 
+                    
+              game_state.RESET_EVERYTHING_PART1:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b010; // write 0 to R2, the led reg 
+                      game_state.d = game_state.RESET_EVERYTHING_PART2;
+
+              game_state.RESET_EVERYTHING_PART2:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b000; // write 0 to R0, the p0 score 
+                      game_state.d = game_state.RESET_EVERYTHING_PART3;        
+              
+              game_state.RESET_EVERYTHING_PART3:
+                      // reset the LED reg 
+                      we=1;
+                      wdsel=b11; 
+                      write_address=b001; // write 0 to R1, the p1 score
+                      game_state.d = game_state.INIT_SEQ;   
+          }
+      }
+      
+      
+      
+      
+      }
